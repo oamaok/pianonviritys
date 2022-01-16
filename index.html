@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<!--
+
+Täältä on turha etsiä mitään. Veikkaisin, että systeemin murtaminen olisi huomattavasti
+vaikeampaa, kuin rehti työ. Ainakin tässä tapauksessa. Selain ei saa mitään tietoa
+kosketinten oikeasta vireydestä, vaan jokainen nuotti on "epävireistetty" palvelimen
+puolella.
+
+Kaikki tässä tiedostossa on käsin kirjoitettua, valitukset koodin siisteydestä voit
+heittää privana GC.comin puolella.
+
+-->
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pianonviritys - GC9M7AW</title>
+  </head>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      outline: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --key-width: 60px;
+      --key-height: 300px;
+      --key-spacing: 2px;
+    }
+
+    body,
+    html {
+      position: relative;
+      font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande',
+        'Lucida Sans', Arial, sans-serif;
+      font-size: 14px;
+    }
+
+    h2,
+    code {
+      color: #02874d;
+    }
+
+    h3 {
+      color: #870202;
+    }
+
+    .parking {
+      color: #040287;
+    }
+
+    body {
+      background: url('/viritys/cartographer.png');
+    }
+
+    p {
+      margin-top: 1em;
+    }
+
+    ul {
+      margin: 10px 0 10px 20px;
+    }
+
+    #init-button {
+      background: rgba(0, 0, 0, 0.75);
+      position: fixed;
+      width: 100%;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      right: 0;
+      z-index: 9001;
+      color: #fff;
+      font-size: 24px;
+      display: none;
+    }
+
+    .uninitialized #init-button {
+      display: block;
+    }
+
+    .main {
+      width: 930px;
+      position: relative;
+      margin: 0 auto;
+      padding-top: 40px;
+      padding-bottom: 200px;
+    }
+
+    .uninitialized .main {
+      filter: blur(5px);
+    }
+
+    .instructions {
+      background: #fff;
+      color: #333;
+      border-top-left-radius: 4px;
+      border-top-right-radius: 4px;
+      border-bottom: 8px solid #02874d;
+      height: 100%;
+      padding: 20px;
+      margin-bottom: 40px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .frame {
+      position: relative;
+      margin: 0 -40px;
+      padding: 20px 40px;
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+    }
+
+    .keyboard {
+      position: relative;
+      height: var(--key-height);
+    }
+
+    .white-keys,
+    .black-keys {
+      display: flex;
+      flex-direction: row;
+    }
+
+    .keyboard button {
+      border-bottom-left-radius: 3px;
+      border-bottom-right-radius: 3px;
+      border-bottom: 5px solid;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .keyboard button:active,
+    .keyboard button.pressed {
+      border-bottom-width: 2px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2),
+        0 4px 4px rgba(0, 0, 0, 0.2) inset;
+    }
+
+    .white-keys button:active,
+    .white-keys button.pressed {
+      background: #f7f7f7;
+    }
+
+    .black-keys button:active,
+    .black-keys button.pressed {
+      background: #3f3f3f;
+    }
+
+    .white-keys {
+      height: 200px;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .white-keys button {
+      height: var(--key-height);
+      width: var(--key-width);
+      margin-right: var(--key-spacing);
+      background: #fff;
+      border-color: #ddd;
+    }
+
+    .black-keys {
+      height: calc(var(--key-height) / 1.75);
+      position: absolute;
+      top: 0;
+      left: calc(var(--key-width) / 1.55);
+    }
+
+    .black-keys button {
+      height: calc(var(--key-height) / 1.75);
+      width: calc(var(--key-width) * 0.75);
+      margin-right: calc(var(--key-width) * 0.25 + var(--key-spacing));
+      background: #444;
+      border-color: #333;
+    }
+
+    .black-keys button.spaced {
+      margin-left: calc(var(--key-width) + var(--key-spacing));
+    }
+
+    .tuning-knobs {
+      display: flex;
+      flex-direction: row;
+      margin: 10px 0;
+    }
+
+    .tuning-knobs.black {
+      padding-left: 30px;
+    }
+
+    .knob {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+
+      background: #444;
+      border: 2px solid #333;
+      position: relative;
+      margin-right: 22px;
+      left: 10px;
+    }
+
+    .knob.spaced {
+      margin-left: 62px;
+    }
+
+    .knob::after {
+      content: ' ';
+      display: block;
+
+      border-left: 2px solid #fff;
+      height: 50%;
+      width: 0;
+      top: 0;
+      left: calc(50% - 1px);
+      position: absolute;
+    }
+
+    #check {
+      background: #02874d;
+      color: #fff;
+      border-radius: 4px;
+      padding: 20px;
+      border-bottom: 2px solid #01683b;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+      font-size: 20px;
+      width: 300px;
+      height: 100px;
+      font-weight: bold;
+    }
+    #check:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .feedback {
+      margin-top: 50px;
+      display: flex;
+      flex-direction: row;
+    }
+
+    #check-result {
+      background: #fff;
+      color: #333;
+      border-top-left-radius: 4px;
+      border-top-right-radius: 4px;
+      border-bottom: 8px solid #02874d;
+      padding: 20px;
+      margin-bottom: 40px;
+      width: 100%;
+      margin-left: 20px;
+      min-height: 100px;
+      font-weight: bold;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+  <body class="uninitialized">
+    <div class="main">
+      <div class="instructions">
+        <h1>
+          Tervetuloa virittämään pianoa!
+          <a href="https://www.geocaching.com/geocache/GC9M7AW" target="_blank"
+            >[GC9M7AW]</a
+          >
+        </h1>
+        <p>
+          Tehtävänäsi on
+          <a href="https://fi.wikipedia.org/wiki/Pianonviritys" target="_blank"
+            >virittää</a
+          >
+          alla oleva piano. Voit soittaa pianoa joko klikkaamalla koskettimia
+          hiirelläsi, tai käyttämällä näppäimistöäsi koskettimina. Näppäimistöä
+          käyttäessäsi:
+        </p>
+        <ul>
+          <li><b>Välilyönti</b> toimii sustain-pedaalina,</li>
+          <li><b>Z-näppäin</b> vastaa nuottia <b>C4</b>,</li>
+          <li><b>S-näppäin</b> nuottia <b>C#4</b>,</li>
+          <li><b>X-näppäin</b> nuottia <b>D4</b>,</li>
+          <li>jne.</li>
+        </ul>
+        <p>
+          Vastaavasti korkeamman oktaavin <b>C5</b> alkaa <b>Q-näppäimestä</b>.
+        </p>
+        <p>
+          Koskettimien yllä olevat nupit vaikuttavat niiden alla olevien mustien
+          koskettimien vireeseen. Vastaavasti koskettimien alla olevat nupit
+          vaikuttavat niiden yläpuolella sijaitseviin valkoisiin koskettimiin.
+          Voit vääntää nuppia tarttumalla siihen hiirelläsi ja vetämällä joko
+          ylös- tai alaspäin.
+        </p>
+        <p>
+          Kun olet mielestäsi saanut kaikki pianon koskettimet viireeseen, paina
+          <i>Tarkasta vireys</i> -nappia. Tarkastus kertoo sinulle, kuinka
+          paljon sinulla on vielä puuhasteltavaa jäljellä. Voit tarkastaa pianon
+          vireyden kerran minuutissa, mutta onneksi sinulla ei ole kiire. Kun
+          pianon kaikki 25 kosketinta ovat vireessä vähintään ±kahdeksan
+          <a href="https://en.wikipedia.org/wiki/Cent_(music)" target="_blank"
+            >sentin</a
+          >
+          tarkuudella käyttäen
+          <a href="https://fi.wikipedia.org/wiki/Tasaviritys" target="_blank"
+            >tasavireyttä</a
+          >
+          ja
+          <a
+            href="https://en.wikipedia.org/wiki/A440_(pitch_standard)"
+            target="_blank"
+            >A4 = 440hz</a
+          >, saat vaivanpalkaksesi kätkön koordinaatit.
+        </p>
+        <p>Työn iloa!</p>
+      </div>
+      <div class="frame">
+        <div class="tuning-knobs black">
+          <div data-note="C#4" class="knob"></div>
+          <div data-note="D#4" class="knob"></div>
+          <div data-note="F#4" class="knob spaced"></div>
+          <div data-note="G#4" class="knob"></div>
+          <div data-note="A#4" class="knob"></div>
+          <div data-note="C#5" class="knob spaced"></div>
+          <div data-note="D#5" class="knob"></div>
+          <div data-note="F#5" class="knob spaced"></div>
+          <div data-note="G#5" class="knob"></div>
+          <div data-note="A#5" class="knob"></div>
+        </div>
+        <div class="keyboard">
+          <div class="white-keys">
+            <button id="C4"></button>
+            <button id="D4"></button>
+            <button id="E4"></button>
+            <button id="F4"></button>
+            <button id="G4"></button>
+            <button id="A4"></button>
+            <button id="B4"></button>
+            <button id="C5"></button>
+            <button id="D5"></button>
+            <button id="E5"></button>
+            <button id="F5"></button>
+            <button id="G5"></button>
+            <button id="A5"></button>
+            <button id="B5"></button>
+            <button id="C6"></button>
+          </div>
+
+          <div class="black-keys">
+            <button id="C#4"></button>
+            <button id="D#4"></button>
+            <button id="F#4" class="spaced"></button>
+            <button id="G#4"></button>
+            <button id="A#4"></button>
+            <button id="C#5" class="spaced"></button>
+            <button id="D#5"></button>
+            <button id="F#5" class="spaced"></button>
+            <button id="G#5"></button>
+            <button id="A#5"></button>
+          </div>
+        </div>
+        <div class="tuning-knobs">
+          <div data-note="C4" class="knob"></div>
+          <div data-note="D4" class="knob"></div>
+          <div data-note="E4" class="knob"></div>
+          <div data-note="F4" class="knob"></div>
+          <div data-note="G4" class="knob"></div>
+          <div data-note="A4" class="knob"></div>
+          <div data-note="B4" class="knob"></div>
+          <div data-note="C5" class="knob"></div>
+          <div data-note="D5" class="knob"></div>
+          <div data-note="E5" class="knob"></div>
+          <div data-note="F5" class="knob"></div>
+          <div data-note="G5" class="knob"></div>
+          <div data-note="A5" class="knob"></div>
+          <div data-note="B5" class="knob"></div>
+          <div data-note="C6" class="knob"></div>
+        </div>
+      </div>
+      <div class="feedback">
+        <button id="check">Tarkasta vireys</button>
+        <div id="check-result">
+          Tarkastusraporttisi tulee luettavaksi tähän.
+        </div>
+      </div>
+    </div>
+    <button id="init-button">Klikkaa aloittaaksesi virittäminen!</button>
+
+    <script>
+      const KEY_TO_NOTE_MAP = {
+        Z: 'C4',
+        S: 'C#4',
+        X: 'D4',
+        D: 'D#4',
+        C: 'E4',
+        V: 'F4',
+        G: 'F#4',
+        B: 'G4',
+        H: 'G#4',
+        N: 'A4',
+        J: 'A#4',
+        M: 'B4',
+
+        ',': 'C5',
+        L: 'C#5',
+        '.': 'D5',
+
+        Q: 'C5',
+        2: 'C#5',
+        W: 'D5',
+        3: 'D#5',
+        E: 'E5',
+        R: 'F5',
+        5: 'F#5',
+        T: 'G5',
+        6: 'G#5',
+        Y: 'A5',
+        7: 'A#5',
+        U: 'B5',
+        I: 'C6',
+      }
+
+      const initButton = document.getElementById('init-button')
+      const checkButton = document.getElementById('check')
+      let token = localStorage.getItem('viritys-token')
+
+      const init = async () => {
+        initButton.removeEventListener('click', init)
+        initButton.innerText = 'Haetaan tietoja...'
+
+        if (!token) {
+          token = await fetch('/viritys/token').then((res) => res.text())
+        } else {
+          if (
+            (await fetch('/viritys/verify', {
+              headers: { authorization: token },
+            }).then((res) => res.text())) !== 'ok'
+          ) {
+            localStorage.removeItem('viritys-tunings')
+            token = await fetch('/viritys/token').then((res) => res.text())
+          }
+        }
+
+        localStorage.setItem('viritys-token', token)
+
+        const context = new AudioContext()
+
+        const notes = Object.values(KEY_TO_NOTE_MAP).filter(
+          (a, b, c) => c.indexOf(a) === b
+        )
+        let loadedNotes = 0
+
+        initButton.innerText = `Ladataan äänitiedostoja... (0%)`
+
+        const noteBuffers = await Promise.all(
+          notes.map((note) =>
+            fetch(`/viritys/piano?note=${encodeURIComponent(note)}`, {
+              headers: { authorization: token },
+            })
+              .then((response) => response.arrayBuffer())
+              .then((buffer) => context.decodeAudioData(buffer))
+              .then((buffer) => {
+                loadedNotes++
+                initButton.innerText = `Ladataan äänitiedostoja... (${(
+                  (loadedNotes / notes.length) *
+                  100
+                ).toFixed(0)}%)`
+
+                return { note, buffer }
+              })
+          )
+        )
+
+        document.body.classList.remove('uninitialized')
+
+        let noteTuningMap = {}
+
+        try {
+          const data = localStorage.getItem('viritys-tunings')
+          if (data) {
+            noteTuningMap = JSON.parse(data)
+          }
+        } catch (err) {}
+
+        const noteToBufferMap = {}
+        for (const { buffer, note } of noteBuffers) {
+          noteTuningMap[note] = noteTuningMap[note] ?? 0
+          noteToBufferMap[note] = buffer
+
+          document.querySelector(
+            `[data-note='${note}']`
+          ).style.transform = `rotate(${(noteTuningMap[note] / 50) * 140}deg)`
+        }
+
+        const noteGainNodes = {}
+        let sustainHeld = false
+        let notesReleasedWhileSustainHeld = []
+
+        const onKeyPress = (note) => {
+          const buffer = noteToBufferMap[note]
+
+          if (!buffer) {
+            return
+          }
+
+          if (noteGainNodes[note]) {
+            return
+          }
+
+          document.getElementById(note).classList.add('pressed')
+
+          const gain = context.createGain()
+          gain.gain.setValueAtTime(0.75, 0)
+          noteGainNodes[note] = gain
+
+          const source = context.createBufferSource()
+          source.buffer = buffer
+
+          source.playbackRate.value = 2 ** (noteTuningMap[note] / 1200)
+          source.connect(gain)
+          source.start(0)
+
+          gain.connect(context.destination)
+        }
+
+        const onKeyRelease = (note) => {
+          const gain = noteGainNodes[note]
+
+          if (!gain) {
+            return
+          }
+
+          document.getElementById(note).classList.remove('pressed')
+
+          noteGainNodes[note] = null
+          gain.gain.setTargetAtTime(0, context.currentTime, 0.05)
+
+          setTimeout(() => {
+            gain.disconnect(context.destination)
+          }, 1000)
+        }
+
+        let activeTuningKnob = null
+        let touchPositionY = null
+
+        document.querySelectorAll('.knob').forEach((knob) => {
+          knob.addEventListener('mousedown', (evt) => {
+            evt.preventDefault()
+            activeTuningKnob = knob
+          })
+          knob.addEventListener('touchstart', (evt) => {
+            evt.preventDefault()
+            activeTuningKnob = knob
+            touchPositionY = evt.touches[0].clientY
+          })
+        })
+
+        const updateKnob = (deltaY) => {
+          const note = activeTuningKnob.getAttribute('data-note')
+
+          noteTuningMap[note] = Math.min(
+            50,
+            Math.max(-50, noteTuningMap[note] - deltaY * 0.4)
+          )
+
+          activeTuningKnob.style.transform = `rotate(${
+            (noteTuningMap[note] / 50) * 140
+          }deg)`
+
+          localStorage.setItem('viritys-tunings', JSON.stringify(noteTuningMap))
+        }
+
+        document.addEventListener('mousemove', (evt) => {
+          if (!evt.buttons) {
+            activeTuningKnob = null
+            return
+          }
+
+          if (!activeTuningKnob) return
+
+          updateKnob(evt.movementY)
+        })
+
+        document.addEventListener('touchmove', (evt) => {
+          if (!activeTuningKnob) return
+          evt.preventDefault()
+          const y = evt.touches[0].clientY
+          updateKnob(y - touchPositionY)
+          touchPositionY = y
+        })
+
+        document.addEventListener('mouseup', (evt) => {
+          activeTuningKnob = null
+        })
+
+        document.addEventListener('touchend', (evt) => {
+          activeTuningKnob = null
+        })
+
+        document.addEventListener('keydown', (evt) => {
+          const key = evt.key.toUpperCase()
+
+          if (key === ' ' && !sustainHeld) {
+            evt.preventDefault()
+            sustainHeld = true
+            notesReleasedWhileSustainHeld = []
+            return
+          }
+
+          const note = KEY_TO_NOTE_MAP[key]
+          if (note) onKeyPress(note)
+        })
+
+        document.addEventListener('keyup', (evt) => {
+          const key = evt.key.toUpperCase()
+
+          if (key === ' ') {
+            sustainHeld = false
+            notesReleasedWhileSustainHeld.forEach(onKeyRelease)
+            return
+          }
+
+          const note = KEY_TO_NOTE_MAP[key]
+          if (note) {
+            if (sustainHeld) {
+              notesReleasedWhileSustainHeld.push(note)
+            } else {
+              onKeyRelease(note)
+            }
+          }
+        })
+
+        document.querySelectorAll('.keyboard button').forEach((button) => {
+          button.addEventListener('touchstart', (evt) => {
+            evt.preventDefault()
+            onKeyPress(button.id)
+          })
+
+          button.addEventListener('touchend', (evt) => {
+            evt.preventDefault()
+            onKeyRelease(button.id)
+          })
+
+          button.addEventListener('mousedown', () => {
+            onKeyPress(button.id)
+          })
+
+          button.addEventListener('mouseup', () => {
+            onKeyRelease(button.id)
+          })
+
+          button.addEventListener('mouseout', () => {
+            onKeyRelease(button.id)
+          })
+        })
+
+        checkButton.addEventListener('click', async () => {
+          checkButton.setAttribute('disabled', true)
+
+          setTimeout(() => checkButton.removeAttribute('disabled'), 60000)
+
+          const result = await fetch('/viritys/check', {
+            method: 'POST',
+            body: JSON.stringify(noteTuningMap),
+            headers: { authorization: token },
+          }).then((res) => res.json())
+
+          document.getElementById('check-result').innerHTML = result.message
+        })
+      }
+
+      initButton.addEventListener('click', init)
+    </script>
+  </body>
+</html>
